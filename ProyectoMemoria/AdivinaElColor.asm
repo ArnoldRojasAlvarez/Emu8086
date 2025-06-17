@@ -1,5 +1,4 @@
-; Proyecto: Simón Dice - Modo Números, Colores y Emojis con Mouse e Intentos
-; Autor: Adaptado según indicaciones del usuario
+; Proyecto: Simon Dice - Modo Numeros, Colores y Emojis con Mouse e Intentos
 
 .MODEL SMALL
 .STACK 100H
@@ -685,11 +684,3 @@ resultados ENDP
        
 END start
      
-     
-;------TO DO-----
-;--FUNCION PARA TIEMPO DE VISTA DE LOS SIMBOLOS--   CHECK
-;--ELIMINAR LOS ELEMENTOS EN PANTALLA--             CHECK
-;--COLOCAR NOMBRE, PUNTOS, VIDA O TIEMPO--          CHECK
-;--FUNCIONALIDAD DE ACIERTO O FALLO--               CHECK
-;--IMPRIMIR RESULTADO                               CHECK
-;--JUEGO PARA 2--                                   CHECK
