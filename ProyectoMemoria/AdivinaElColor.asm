@@ -28,8 +28,8 @@
     color db 0,'$'
     x_index db 0,'$'
     y_index db 0,'$' 
-    tiempoU db 5,'$'
-    tiempoD db 1 n,'$'
+    tiempo db 1,5,'$'  ; decenas, unidades
+    contaTiempo db 0,'$'
     num_pos_x db  31, 38, 45, 50, 50, 45, 38, 31, 26, 26,'$'
     num_pos_y db  5,  4,  5,  9, 16, 20, 21, 20, 16,  9,'$'
 
@@ -52,6 +52,11 @@
     msg_winner      db 0Ah,0Dh,'------WINNER------$'
     msg_losser      db 0Ah,0Dh,'------LOSSER------$' 
     msg_empate      db 0Ah,0Dh,'------EMPATE------$'
+    msg_reiniciar   db 'R = Reiniciar$'
+    msg_salir       db 'Q = Quitar$'
+    msg_rendirse    db 'S = Rendirse$'
+
+    
 .CODE
 start:
     mov ax, @data
@@ -63,7 +68,44 @@ main_loop:
     call generar_secuencia
     call mostrar_secuencia   
     call imprimir_elementos
+
+    ; Resetear tiempo si tipo_partida = '1'
+    cmp tipo_partida, '1'
+    jne skip_reset_tiempo
+    mov byte ptr contaTiempo, 0
+    skip_reset_tiempo:
     call imprimir_numeros_fijos
+
+    ; Mostrar mensajes de teclas (abajo a la derecha)
+     ; --- Mostrar ayuda de teclas ---
+    ; R = Reiniciar
+    mov ah, 02h
+    mov bh, 0
+    mov dh, 12        ; fila 9
+    mov dl, 1        ; columna 1
+    int 10h
+    lea dx, msg_reiniciar
+    mov ah, 09h
+    int 21h
+
+    ; S = Rendirse
+    mov ah, 02h
+    mov dh, 14
+    mov dl, 1
+    int 10h
+    lea dx, msg_rendirse
+    mov ah, 09h
+    int 21h
+
+    ; Q = Quitar
+    mov ah, 02h
+    mov dh, 16
+    mov dl, 1
+    int 10h
+    lea dx, msg_salir
+    mov ah, 09h
+    int 21h
+
     call esperar_clicks
     jmp main_loop  
     
@@ -351,14 +393,8 @@ print_num:
     cmp di, 10
     jne print_num 
     ret   
-imprimir_numeros_fijos ENDP
-                         
-                         
-                         
-                         
-                         
-                         
-                         
+imprimir_numeros_fijos ENDP               
+
 esperar_clicks PROC
     cmp turno, '1'
     je continuar_turno
@@ -368,23 +404,44 @@ continuar_turno:
     mov si, 0
     mov index, 0
 esperar:
+    ; Detectar tecla sin detener ejecución (INT 21h, AH=06h)
+    mov ah, 06h
+    mov dl, 0FFh
+    int 21h
+    cmp al, 0
+    je continuar_clicks
+
+    cmp al, 'r'
+    je tecla_reiniciar
+    cmp al, 'R'
+    je tecla_reiniciar
+    cmp al, 's'
+    je tecla_rendirse
+    cmp al, 'S'
+    je tecla_rendirse
+    cmp al, 'q'
+    je tecla_salir
+    cmp al, 'Q'
+    je tecla_salir
+
+continuar_clicks:
     call leer_click
     mov di, 0 
      
-    xor ax,ax                                      ;1
+    xor ax,ax
 buscar:                               
     cmp bx,1
-    jne esperar
-    
-    mov al, [num_pos_x + di]        ;num_pos_x db  31, 38, 45, 50, 50, 45, 38, 31, 26, 26,'$'
+    jne checar_tiempo
+
+    mov al, [num_pos_x + di]
     mov ah,x_mouse
     cmp al, ah
     jne sig
-    mov dl, [num_pos_y + di]        ;num_pos_y db   5,  4,  5,  9, 16, 20,  21, 20, 16, 9,'$'
+    mov dl, [num_pos_y + di]
     mov dh, y_mouse
-    cmp dl, dh                 ;dl a su vez devuelve index del valor correcto
+    cmp dl, dh
     jne sig
-    mov al, secuencia[si]           ;[2,3,1,1,0]
+    mov al, secuencia[si]
     
     mov bl, modo_juego
 
@@ -449,13 +506,61 @@ mostrar_msg:
     
     jmp main_loop
     ret
+
+checar_tiempo:
+    cmp tipo_partida, '1'
+    jne esperar
+
+    mov al, contaTiempo
+    inc al
+    mov contaTiempo, al
+    cmp al, 5
+    jb esperar
+
+    mov contaTiempo, 0
+
+    mov al, tiempo+1
+    dec al
+    cmp al, 0FFh
+    jne no_rebote
+    mov al, 9
+    mov bl, tiempo
+    dec bl
+    mov tiempo, bl
+no_rebote:
+    mov tiempo+1, al
+
+    mov al, tiempo
+    or al, tiempo+1
+    jnz reintegra_tiempo
+
+    jmp game_over
+
+reintegra_tiempo:
+    
+    mov ah, 02h
+    mov bh, 0
+    mov dh, 9
+    mov dl, 8
+    int 10h
+    mov ah, 02h
+    mov dl, tiempo       ; decenas
+    add dl, '0'
+    int 21h
+    mov dl, tiempo+1     ; unidades
+    add dl, '0'
+    int 21h
+    jmp esperar
+
 sig:  
-     
     inc di
     cmp di, 10
     jne buscar
     jmp fallo
-fallo:
+
+fallo:  
+    cmp tipo_partida, '1'
+    je check_falloTiempo 
     cmp turno, '1'
     je dec_j1
     dec intentos2
@@ -470,6 +575,9 @@ check_fallo:
     je game_over
     jmp main_loop
     ret
+check_falloTiempo:
+    jmp main_loop
+    ret
 game_over:
     lea dx, msg_perdio
     mov ah, 09h
@@ -480,17 +588,39 @@ game_over:
     cmp turno, '1'
     je turno_a_2
     jmp terminar_juego
+
 turno_a_2:
     mov turno, '2'
     mov al, intentos2
-    mov intentos, al
+    mov intentos, al  
+    mov tiempo, 1
+    mov tiempo+1, 5
     jmp main_loop
+
 terminar_juego:
     call limpiar
     call resultados
     mov ah, 4Ch
     int 21h
+
+tecla_reiniciar:
+    jmp main_loop
+
+tecla_salir:
+    call limpiar
+    mov ah, 4Ch
+    int 21h
+
+tecla_rendirse:
+    lea dx, msg_perdio
+    mov ah, 09h
+    int 21h
+    call delay
+    jmp game_over
+
 esperar_clicks ENDP
+
+
                              
                 
 leer_click PROC  
@@ -603,7 +733,37 @@ imprimir_elementos PROC
     jmp printVid1  
     salirVid1:
     mov ah, 02h 
-    mov dl, intentos      ; ya es el carácter ASCII (ej. '0' a '9')
+    mov dl, intentos
+    ; Modo tiempo
+    cmp tipo_partida, '1'
+    jne fin_imp_tiempo
+    mov di,0    
+    mov ah, 02h
+    mov bh, 0
+    lea di, msg_tiempo
+    mov dh, 8
+    mov dl, 6
+    int 10h 
+printTiempoMsg:
+    mov al,[di]
+    cmp al,0
+    je salirTiempoMsg 
+    inc di  
+    cmp al,'$'
+    je salirTiempoMsg
+    mov ah, 02h
+    mov dl, al
+    int 21h    
+    jmp printTiempoMsg
+salirTiempoMsg:
+    mov ah, 02h
+    mov dl, tiempo       ; decenas
+    add dl, '0'
+    int 21h
+    mov dl, tiempo+1     ; unidades
+    add dl, '0'
+fin_imp_tiempo:
+      ; ya es el carácter ASCII (ej. '0' a '9')
     int 21h 
     
     ret
@@ -636,6 +796,7 @@ resultados PROC
     call delay 
     call delay
     call delay
+    call delay
     call limpiar
     mov turno, '2'
     mov ah, 09h
@@ -652,6 +813,7 @@ resultados PROC
     
     call imprimir_elementos
     call delay 
+    call delay
     call delay
     call delay
     call limpiar
@@ -671,6 +833,7 @@ resultados PROC
     call imprimir_elementos
     call delay 
     call delay
+    call delay 
     call delay
     call limpiar
     mov turno, '1'
